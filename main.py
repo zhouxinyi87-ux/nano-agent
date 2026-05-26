@@ -2,7 +2,13 @@ from openai import OpenAI
 import json
 import subprocess
 
-client = OpenAI()
+with open("config.json", "r") as f:
+    config = json.load(f)
+
+client = OpenAI(
+    base_url=config["base_url"],
+    api_key=config["api_key"]
+)
 
 TOOLS = [
     {
@@ -199,6 +205,7 @@ Be careful with edit_file - the old_string must match exactly. Use read_file fir
     ]
 
     for i in range(max_iterations):
+        # step 1: 把完整的对话历史 + 工具列表发送给LLM
         response = client.chat.completions.create(
             model="MiniMax-M2.7",
             messages=messages,
@@ -209,6 +216,7 @@ Be careful with edit_file - the old_string must match exactly. Use read_file fir
 
         assistant_message = response.choices[0].message
 
+        # Step 2: 处理LLM的回复，展示思考过程和工具调用
         if assistant_message.reasoning_details:
             print(f"[Think] {assistant_message.reasoning_details[0]['text'][:200]}...")
 
@@ -235,6 +243,7 @@ Be careful with edit_file - the old_string must match exactly. Use read_file fir
                     "content": result
                 })
         else:
+            # step 3: 如果没有工具调用，说明LLM认为自己已经完成了任务，直接输出结果
             print(f"\n[Final Response] {assistant_message.content}")
             return assistant_message.content
 
