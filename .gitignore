@@ -217,5 +217,8 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# Agent memory storage
+.agent_memory/
+
 # Config file with API credentials
 config.json
