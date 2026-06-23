@@ -220,6 +220,21 @@ TOOLS = [
                 "properties": {}
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_plan",
+            "description": "Create a structured plan BEFORE taking any action. Use this for complex tasks.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "task": {"type": "string", "description": "The user's task/goal"},
+                    "steps": {"type": "array", "items": {"type": "string"}, "description": "Ordered list of steps to achieve the task"}
+                },
+                "required": ["task", "steps"]
+            }
+        }
     }
 ]
 
@@ -326,15 +341,24 @@ def execute_tool(tool_name: str, arguments: dict) -> str:
         return memory_append(**arguments)
     elif tool_name == "memory_clear":
         return memory_clear()
+    elif tool_name == "create_plan":
+        return create_plan(**arguments)
     return f"Unknown tool: {tool_name}"
 
 # ============ Agent Loop ============
-def agent_loop(user_message: str, max_iterations: int = 10):
+def agent_loop(user_message: str, max_iterations: int = 10, planning_mode: bool = False):
     # 读取记忆并构建 system prompt
     memory_content = memory_read()
 
+    planning_instruction = """IMPORTANT: For complex tasks, use create_plan FIRST before using other tools.
+Break down the task into clear, ordered steps. After creating the plan,
+execute each step using appropriate tools in order.""" if planning_mode else ""
+
     system_prompt = f"""You are a helpful coding assistant with file operation and bash tools.
 {memory_content}
+
+{planning_instruction}
+
 
 Available tools:
 - read_file(path): Read a file's content
@@ -346,6 +370,7 @@ Available tools:
 - memory_write(content): Write important information to long-term memory (overwrites previous memory)
 - memory_append(text): Append new information to existing memory
 - memory_clear(): Clear all memory (use with caution)
+- create_plan(task, steps): Create a structured plan BEFORE taking any action
 
 When writing Python programs:
 1. Use write_file to create the .py file
@@ -409,14 +434,43 @@ Be careful with edit_file - the old_string must match exactly. Use read_file fir
 
     return "Max iterations reached"
 
+# ============ 规划状态 ============
+current_plan = {
+    "task": "",
+    "steps": [],
+    "current_step": 0
+}
+
+def create_plan(task: str, steps: list) -> str:
+    """Save a plan for the current task"""
+    current_plan["task"] = task
+    current_plan["steps"] = steps
+    current_plan["current_step"] = 0
+
+    plan_text = "\n".join([f"{i+1}. {s}" for i, s in enumerate(steps)])
+    return f"Plan created for '{task}':\n{plan_text}"
+
 # ============ 主程序 ============
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) > 1:
-        task = " ".join(sys.argv[1:])
+
+    # 解析命令行参数
+    planning_mode = False
+    task_args = []
+
+    for arg in sys.argv[1:]:
+        if arg == "--plan":
+            planning_mode = True
+        else:
+            task_args.append(arg)
+
+    if task_args:
+        task = " ".join(task_args)
     else:
         task = input("Enter your task: ")
 
-    print(f"Task: {task}\n")
-    result = agent_loop(task)
+    print(f"Task: {task}")
+    print(f"Planning mode: {'ON' if planning_mode else 'OFF'}\n")
+
+    result = agent_loop(task, planning_mode=planning_mode)
     print(f"\nFinal result: {result}")
